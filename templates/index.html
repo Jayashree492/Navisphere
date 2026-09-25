@@ -1,1 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
 
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>NaviSphere AI</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='style.css', v='20260925-1') }}"
+    >
+
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+
+</head>
+
+<body>
+
+<header class="navbar">
+
+    <div class="brand">
+
+        <div class="brand-icon">
+            ✦
+        </div>
+
+        <div>
+            <h2>NaviSphere</h2>
+            <span>AI</span>
+        </div>
+
+    </div>
+
+    <nav>
+
+        <a href="#explore">Explore</a>
+
+        <a href="#essentials">Essentials</a>
+
+        <a href="#food">Food</a>
+
+        <a href="#routes">Routes</a>
+
+        <a href="#triptwin">TripTwin</a>
+
+        <a href="#simulator">What-If</a>
+
+    </nav>
+
+    <button
+        id="themeToggle"
+        class="theme-button"
+    >
+        🌙
+    </button>
+
+</header>
+
+
+<main>
+
+
+<!-- HERO -->
+
+<section class="hero">
+
+    <div class="hero-content">
+
+        <div class="badge">
+            ✦ AI-powered real-world orientation
+        </div>
+
+        <h1>
+            A new place
+            <span>shouldn't feel unfamiliar.</span>
+        </h1>
+
+        <p>
+
+            Understand any place. Find what you need.
+            Navigate with confidence.
+
+        </p>
+
+        <div class="hero-search">
+
+            <input
+                id="mainQuery"
+                placeholder="Try: vegetarian food near me..."
+            >
+
+            <input
+                id="mainLocation"
+                placeholder="City / location"
+            >
+
+            <button
+                onclick="performSearch()"
+            >
+                Explore
+            </button>
+
+        </div>
+
+        <div class="location-tools">
+            <button
+                id="locationButton"
+                class="location-button"
+                onclick="useCurrentLocation(false)"
+            >
+                📍 Use my current location
+            </button>
+
+            <button
+                class="food-near-button"
+                onclick="searchFoodNearMe()"
+            >
+                🍽️ Find food near me
+            </button>
+
+            <span id="locationStatus" class="location-status">Location not selected</span>
+        </div>
+
+        <div class="quick-actions">
+
+            <button onclick="quickSearch('hospitals')">
+                🏥 Hospitals
+            </button>
+
+            <button onclick="quickSearch('pharmacies')">
+                💊 Pharmacy
+            </button>
+
+            <button onclick="quickSearch('vegetarian restaurants')">
+                🍽️ Food
+            </button>
+
+            <button onclick="quickSearch('ATMs')">
+                💳 ATMs
+            </button>
+
+            <button onclick="quickSearch('grocery stores')">
+                🛒 Groceries
+            </button>
+
+        </div>
+
+    </div>
+
+</section>
+<section class="ai-guide-section">
+
+    <div class="section-label">
+        ✦ AI LOCAL GUIDE
+    </div>
+
+    <h2>
+        Tell NaviSphere what you need
+    </h2>
+
+    <p>
+        Ask naturally. NaviSphere will understand your request
+        and help you explore the place.
+    </p>
+
+    <div class="ai-guide-box">
+
+        <textarea
+            id="aiMessage"
+            placeholder="Example: I'm new to Bangalore. Find vegetarian food under ₹500 near a metro station."
+        ></textarea>
+
+        <button id="askAIButton">
+            ✦ Ask NaviSphere AI
+        </button>
+
+    </div>
+
+    <div id="aiLoading" class="ai-loading">
+        NaviSphere is thinking...
+    </div>
+
+    <div id="aiResponse" class="ai-response"></div>
+
+</section> 
+
+<!-- EXPLORE -->
+
+<section
+    id="explore"
+    class="section"
+>
+
+    <div class="section-heading">
+
+        <span>01 · CITY LENS</span>
+
+        <h2>Explore This Place</h2>
+
+        <p>
+            Discover what surrounds you using real-world
+            location data.
+        </p>
+
+    </div>
+
+    <div class="map-toolbar">
+        <button id="satelliteToggle" class="map-toggle" onclick="toggleSatellite()">
+            🛰️ Satellite
+        </button>
+
+        <button class="map-toggle" onclick="useCurrentLocation(false)">
+            📍 Locate me
+        </button>
+
+        <a
+            id="currentStreetView"
+            class="map-toggle map-link"
+            href="#"
+            target="_blank"
+            rel="noopener"
+            onclick="return openCurrentStreetView()"
+        >
+            📷 Street View
+        </a>
+    </div>
+
+    <div class="explore-grid">
+
+        <div id="map"></div>
+
+        <div class="results-panel">
+
+            <div class="panel-header">
+
+                <h3>Nearby Places</h3>
+
+                <span id="resultCount">
+                    Ready
+                </span>
+
+            </div>
+
+            <div id="results">
+
+                <div class="empty-state">
+
+                    <div>🧭</div>
+
+                    <h3>
+                        Tell NaviSphere what you need
+                    </h3>
+
+                    <p>
+                        Search for places, services,
+                        food or essentials.
+                    </p>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="visual-grounding">
+        <div class="visual-card">
+            <span class="visual-icon">🛰️</span>
+            <div>
+                <strong>Satellite context</strong>
+                <p>Switch the map to aerial imagery to understand buildings, roads and the surrounding area.</p>
+            </div>
+            <button class="visual-button" onclick="toggleSatellite()">View satellite</button>
+        </div>
+
+        <div class="visual-card">
+            <span class="visual-icon">📷</span>
+            <div>
+                <strong>Real street-level view</strong>
+                <p>Open the closest available Google Street View panorama for your location or a selected place.</p>
+            </div>
+            <button class="visual-button" onclick="openCurrentStreetView()">Open 360° view</button>
+        </div>
+    </div>
+
+</section>
+
+
+<!-- ESSENTIALS -->
+
+<section
+    id="essentials"
+    class="section"
+>
+
+    <div class="section-heading">
+
+        <span>02 · NEED FINDER</span>
+
+        <h2>Find What Matters</h2>
+
+        <p>
+            Quickly discover essential services in an unfamiliar place.
+        </p>
+
+    </div>
+
+    <div class="feature-grid">
+
+        <div class="feature-card">
+            <div>🏥</div>
+            <h3>Hospitals</h3>
+            <p>Find nearby hospitals and understand where they are.</p>
+            <button onclick="quickSearch('hospitals')">
+                Find Hospitals
+            </button>
+        </div>
+
+        <div class="feature-card">
+            <div>💊</div>
+            <h3>Pharmacies</h3>
+            <p>Locate pharmacies around your destination.</p>
+            <button onclick="quickSearch('pharmacies')">
+                Find Pharmacies
+            </button>
+        </div>
+
+        <div class="feature-card">
+            <div>🏧</div>
+            <h3>ATMs</h3>
+            <p>Find nearby cash access points.</p>
+            <button onclick="quickSearch('ATMs')">
+                Find ATMs
+            </button>
+        </div>
+
+        <div class="feature-card">
+            <div>🛒</div>
+            <h3>Groceries</h3>
+            <p>Discover supermarkets and grocery stores.</p>
+            <button onclick="quickSearch('grocery stores')">
+                Find Groceries
+            </button>
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- FOOD -->
+
+<section
+    id="food"
+    class="section colored-section"
+>
+
+    <div class="section-heading">
+
+        <span>03 · SMART FOOD</span>
+
+        <h2>Food That Fits You</h2>
+
+        <p>
+            Search by preference, budget and location.
+        </p>
+
+    </div>
+
+    <div class="food-controls">
+
+        <input
+            id="foodPreference"
+            placeholder="Vegetarian, vegan, halal, South Indian..."
+        >
+
+        <div class="budget-input-wrap">
+            <span>₹</span>
+            <input
+                id="foodBudget"
+                type="number"
+                min="1"
+                step="1"
+                inputmode="decimal"
+                autocomplete="off"
+                placeholder="Type budget e.g. 500"
+                aria-label="Food budget per person in Indian rupees"
+            >
+        </div>
+
+        <label class="open-now-control">
+            <input id="foodOpenNow" type="checkbox">
+            <span>Open now</span>
+        </label>
+
+        <button
+            onclick="searchFood()"
+        >
+            Discover Food
+        </button>
+
+    </div>
+
+    <p class="food-note">
+        Tip: click <strong>Use my current location</strong> above to find nearby food and services around you.
+    </p>
+
+</section>
+
+
+<!-- ROUTES -->
+
+<section
+    id="routes"
+    class="section"
+>
+
+    <div class="section-heading">
+
+        <span>04 · SMART ROUTES</span>
+
+        <h2>Compare Your Journey</h2>
+
+        <p>
+            Understand distance, duration and available route options.
+        </p>
+
+    </div>
+
+    <div class="route-box">
+
+        <input
+            id="routeStart"
+            placeholder="Starting point"
+        >
+
+        <div class="route-arrow">
+            →
+        </div>
+
+        <input
+            id="routeEnd"
+            placeholder="Destination"
+        >
+
+        <button onclick="getDirections()">
+            Compare Routes
+        </button>
+
+    </div>
+
+    <div id="routeResults"></div>
+
+</section>
+
+
+<!-- TRIPTWIN -->
+
+<section
+    id="triptwin"
+    class="section dark-panel"
+>
+
+    <div class="section-heading">
+
+        <span>05 · TRIPTWIN AI</span>
+
+        <h2>Your Journey. Tested Before You Go.</h2>
+
+        <p>
+            Check whether your plan fits your time,
+            budget and schedule buffer.
+        </p>
+
+    </div>
+
+    <div class="twin-grid">
+
+        <div class="control-card">
+
+            <label>
+                Total Budget
+            </label>
+
+            <input
+                id="twinBudget"
+                type="number"
+                value="2000"
+            >
+
+            <label>
+                Planned Spending
+            </label>
+
+            <input
+                id="twinSpending"
+                type="number"
+                value="1400"
+            >
+
+            <label>
+                Travel Time (minutes)
+            </label>
+
+            <input
+                id="twinTravel"
+                type="number"
+                value="42"
+            >
+
+            <label>
+                Schedule Buffer (minutes)
+            </label>
+
+            <input
+                id="twinBuffer"
+                type="number"
+                value="15"
+            >
+
+            <button onclick="runTripTwin()">
+                Test My Trip
+            </button>
+
+        </div>
+
+        <div
+            id="twinResult"
+            class="twin-result"
+        >
+
+            <div class="twin-placeholder">
+                🧠
+                <h3>
+                    TripTwin is waiting
+                </h3>
+
+                <p>
+                    Enter your trip constraints
+                    and test your plan.
+                </p>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- WHAT IF -->
+
+<section
+    id="simulator"
+    class="section"
+>
+
+    <div class="section-heading">
+
+        <span>06 · WHAT-IF SIMULATOR</span>
+
+        <h2>Reality Changes. Your Plan Should Too.</h2>
+
+        <p>
+            Test changes before they disrupt the journey.
+        </p>
+
+    </div>
+
+    <div class="simulation-box">
+
+        <select id="scenario">
+
+            <option>
+                Reduce Budget
+            </option>
+
+            <option>
+                Remove Taxi
+            </option>
+
+            <option>
+                Less Walking
+            </option>
+
+            <option>
+                Restaurant Closed
+            </option>
+
+        </select>
+
+        <input
+            id="simulationBudget"
+            type="number"
+            value="15000"
+        >
+
+        <button onclick="runSimulation()">
+            Simulate Change
+        </button>
+
+    </div>
+
+    <div
+        id="simulationResult"
+        class="simulation-result"
+    ></div>
+
+</section>
+
+
+<!-- VISION -->
+
+<section class="vision">
+
+    <div class="vision-content">
+
+        <span>
+            NAVISPHERE AI
+        </span>
+
+        <h2>
+            Don't just plan the trip.
+            Understand the journey.
+        </h2>
+
+        <p>
+            Explore → Discover → Navigate →
+            Decide → Validate → Adapt
+        </p>
+
+    </div>
+
+</section>
+
+</main>
+
+
+<footer>
+
+    <div>
+        <strong>NaviSphere AI</strong>
+        <p>
+            Understand any place. Navigate with confidence.
+        </p>
+    </div>
+
+    <div>
+        Powered by real-world search intelligence
+    </div>
+
+</footer>
+
+
+<script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+></script>
+
+<script
+    src="{{ url_for('static', filename='app.js', v='20260925-1') }}"
+></script>
+
+</body>
+
+</html>
