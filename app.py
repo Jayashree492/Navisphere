@@ -1,407 +1,1398 @@
 import os
+import math
 import requests
-from urllib.parse import quote_plus
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, request, jsonify, render_template
 from dotenv import load_dotenv
-from openai import OpenAI
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-ENV_FILE = os.path.join(BASE_DIR, ".env")
-load_dotenv(ENV_FILE, override=False)
+load_dotenv()
 
 app = Flask(__name__)
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
-SERPAPI_URL = "https://serpapi.com/search.json"
+# =========================================================
+# API KEY
+# =========================================================
 
-openai_client = None
-if OPENAI_API_KEY:
-    try:
-        openai_client = OpenAI(api_key=OPENAI_API_KEY)
-    except Exception:
-        openai_client = None
+SERPAPI_KEY = os.getenv("SERPAPI_KEY")
 
 
-def get_serpapi_key():
-    """Read the key at request time so .env/environment changes are respected."""
-    load_dotenv(ENV_FILE, override=False)
-    return os.getenv("SERPAPI_KEY", "").strip()
+# =========================================================
+# TRANSPORT SETTINGS
+# These are estimates, not live fares.
+# =========================================================
 
+TRANSPORTS = {
+    "walking": {
+        "label": "Walking",
+        "icon": "🚶",
+        "speed": 5,
+        "base_cost": 0,
+        "cost_per_km": 0
+    },
 
-def serpapi_search(params):
-    """Call SerpApi. Returns a dict and never crashes the Flask route."""
-    serpapi_key = get_serpapi_key()
-    if not serpapi_key:
-        return {"error": "SERPAPI_KEY_NOT_CONFIGURED"}
+    "bicycle": {
+        "label": "Bicycle",
+        "icon": "🚲",
+        "speed": 15,
+        "base_cost": 0,
+        "cost_per_km": 0
+    },
 
-    request_params = dict(params)
-    request_params["api_key"] = serpapi_key
-    request_params["output"] = "json"
+    "bike": {
+        "label": "Bike",
+        "icon": "🏍️",
+        "speed": 35,
+        "base_cost": 10,
+        "cost_per_km": 3
+    },
 
-    try:
-        response = requests.get(SERPAPI_URL, params=request_params, timeout=25)
-        try:
-            data = response.json()
-        except ValueError:
-            return {"error": f"SerpApi returned HTTP {response.status_code} instead of JSON."}
+    "auto": {
+        "label": "Auto",
+        "icon": "🛺",
+        "speed": 25,
+        "base_cost": 30,
+        "cost_per_km": 12
+    },
 
-        if response.status_code >= 400:
-            return {"error": data.get("error") or f"SerpApi HTTP {response.status_code}."}
-        if data.get("error"):
-            return {"error": data["error"]}
-        return data
-    except requests.RequestException as exc:
-        return {"error": f"SerpApi connection failed: {exc}"}
+    "taxi": {
+        "label": "Taxi / Cab",
+        "icon": "🚕",
+        "speed": 30,
+        "base_cost": 50,
+        "cost_per_km": 18
+    },
 
+    "car": {
+        "label": "Car",
+        "icon": "🚗",
+        "speed": 30,
+        "base_cost": 0,
+        "cost_per_km": 8
+    },
 
-def geocode_location(location):
-    """Geocode a typed city/address using OpenStreetMap Nominatim."""
-    try:
-        response = requests.get(
-            "https://nominatim.openstreetmap.org/search",
-            params={"q": location, "format": "json", "limit": 1},
-            headers={"User-Agent": "NaviSphereAI/1.0"},
-            timeout=15,
-        )
-        response.raise_for_status()
-        items = response.json()
-        if not items:
-            return None
-        return float(items[0]["lat"]), float(items[0]["lon"])
-    except (requests.RequestException, ValueError, KeyError, TypeError):
-        return None
+    "bus": {
+        "label": "Bus",
+        "icon": "🚌",
+        "speed": 22,
+        "base_cost": 10,
+        "cost_per_km": 2
+    },
 
+    "metro": {
+        "label": "Train / Metro",
+        "icon": "🚆",
+        "speed": 35,
+        "base_cost": 10,
+        "cost_per_km": 2
+    },
 
-def osm_search(query, lat=None, lng=None, location=None, limit=20):
-    """Fallback search using OpenStreetMap Overpass when SerpApi is unavailable.
-
-    This keeps Explore usable without exposing or requiring a secret API key.
-    """
-    if lat is None or lng is None:
-        if not location:
-            return {"error": "LOCATION_REQUIRED"}
-        coords = geocode_location(location)
-        if not coords:
-            return {"error": "Could not find that location."}
-        lat, lng = coords
-
-    q = (query or "restaurants").lower()
-    if any(x in q for x in ["hospital", "hospitals"]):
-        tags = [('amenity', 'hospital')]
-    elif any(x in q for x in ["pharmacy", "pharmacies", "chemist"]):
-        tags = [('amenity', 'pharmacy')]
-    elif "atm" in q or "cash" in q:
-        tags = [('amenity', 'atm')]
-    elif any(x in q for x in ["grocery", "groceries", "supermarket"]):
-        tags = [('shop', 'supermarket'), ('shop', 'convenience')]
-    elif any(x in q for x in ["hotel", "hotels"]):
-        tags = [('tourism', 'hotel')]
-    else:
-        # Food and general nearby searches.
-        tags = [('amenity', 'restaurant'), ('amenity', 'cafe'), ('amenity', 'fast_food')]
-
-    clauses = []
-    for key, value in tags:
-        clauses.append(f'nwr["{key}"="{value}"](around:6000,{lat},{lng});')
-    overpass_query = "[out:json][timeout:20];(" + "".join(clauses) + ");out center tags;"
-
-    try:
-        response = requests.post(
-            "https://overpass-api.de/api/interpreter",
-            data=overpass_query,
-            headers={"User-Agent": "NaviSphereAI/1.0"},
-            timeout=30,
-        )
-        response.raise_for_status()
-        raw = response.json().get("elements", [])
-    except (requests.RequestException, ValueError):
-        return {"error": "Live place search is temporarily unavailable. Please try again."}
-
-    results = []
-    seen = set()
-    for element in raw:
-        tags_data = element.get("tags") or {}
-        title = tags_data.get("name")
-        if not title:
-            continue
-        key = (title.lower(), tags_data.get("addr:street", "").lower())
-        if key in seen:
-            continue
-        seen.add(key)
-
-        if "lat" in element and "lon" in element:
-            place_lat, place_lng = element["lat"], element["lon"]
-        else:
-            center = element.get("center") or {}
-            place_lat, place_lng = center.get("lat"), center.get("lon")
-        if place_lat is None or place_lng is None:
-            continue
-
-        address_parts = [
-            tags_data.get("addr:housenumber"),
-            tags_data.get("addr:street"),
-            tags_data.get("addr:city"),
-        ]
-        address = ", ".join(x for x in address_parts if x)
-        website = tags_data.get("website") or tags_data.get("contact:website")
-        phone = tags_data.get("phone") or tags_data.get("contact:phone")
-        opening = tags_data.get("opening_hours")
-
-        results.append({
-            "title": title,
-            "rating": None,
-            "reviews": None,
-            "price": None,
-            "type": tags_data.get("amenity") or tags_data.get("shop") or tags_data.get("tourism") or "Nearby place",
-            "address": address or "Address not listed",
-            "phone": phone,
-            "open_state": f"Hours: {opening}" if opening else "Opening hours unavailable",
-            "hours": opening,
-            "description": None,
-            "thumbnail": None,
-            "data_id": None,
-            "latitude": place_lat,
-            "longitude": place_lng,
-            "website": website,
-            "directions": f"https://www.google.com/maps/dir/?api=1&destination={place_lat},{place_lng}",
-            "street_view_url": f"https://www.google.com/maps/@?api=1&map_action=pano&viewpoint={place_lat}%2C{place_lng}",
-            "satellite_url": f"https://www.google.com/maps/@?api=1&map_action=map&center={place_lat}%2C{place_lng}&zoom=18&basemap=satellite",
-        })
-        if len(results) >= limit:
-            break
-
-    return {
-        "local_results": results,
-        "coordinates": {"latitude": lat, "longitude": lng},
-        "fallback": True,
+    "van": {
+        "label": "Van",
+        "icon": "🚐",
+        "speed": 28,
+        "base_cost": 40,
+        "cost_per_km": 12
     }
+}
 
+
+# =========================================================
+# HOME
+# =========================================================
 
 @app.route("/")
 def home():
     return render_template("index.html")
 
 
+# =========================================================
+# HEALTH CHECK
+# =========================================================
+
 @app.route("/api/health")
 def health():
+
     return jsonify({
-        "app": "NaviSphere AI",
-        "backend": True,
-        "serpapi_configured": bool(get_serpapi_key()),
-        "osm_fallback": True,
+        "success": True,
+        "message": "NaviSphere AI backend is running",
+        "serpapi_configured": bool(SERPAPI_KEY),
+        "openai": "disabled_optional"
     })
 
 
-@app.route("/api/search")
-def search_places():
-    query = request.args.get("q", "restaurants").strip() or "restaurants"
-    location = request.args.get("location", "").strip()
-    lat_raw = request.args.get("lat", "").strip()
-    lng_raw = request.args.get("lng", "").strip()
-    budget_raw = request.args.get("budget", "").strip()
-    open_now = request.args.get("open_now", "0") == "1"
+# =========================================================
+# GEOCODING
+# OpenStreetMap Nominatim
+# =========================================================
 
-    lat = lng = None
-    has_coordinates = bool(lat_raw and lng_raw)
-    if has_coordinates:
-        try:
-            lat, lng = float(lat_raw), float(lng_raw)
-            if not (-90 <= lat <= 90 and -180 <= lng <= 180):
-                raise ValueError
-        except ValueError:
-            return jsonify({"error": "Invalid current-location coordinates."}), 400
+def geocode_location(location):
 
-    if not has_coordinates and not location:
-        return jsonify({"error": "Please enter a city/location or allow current-location access."}), 400
+    if not location:
+        return None
 
-    budget = None
-    if budget_raw:
-        try:
-            budget = float(budget_raw)
-            if budget <= 0:
-                raise ValueError
-        except ValueError:
-            return jsonify({"error": "Budget must be a positive number, for example 300 or 500."}), 400
+    try:
 
-    q_lower = query.lower()
-    category_map = {
-        "hospital": "hospitals", "pharmacy": "pharmacies", "chemist": "pharmacies",
-        "atm": "ATMs", "grocery": "grocery stores", "supermarket": "supermarkets", "hotel": "hotels",
+        response = requests.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={
+                "q": location,
+                "format": "json",
+                "limit": 1
+            },
+            headers={
+                "User-Agent": "NaviSphereAI/1.0"
+            },
+            timeout=10
+        )
+
+        response.raise_for_status()
+
+        results = response.json()
+
+        if not results:
+            return None
+
+        return {
+            "lat": float(results[0]["lat"]),
+            "lng": float(results[0]["lon"]),
+            "display_name": results[0].get(
+                "display_name",
+                location
+            )
+        }
+
+    except Exception:
+
+        return None
+
+
+# =========================================================
+# HAVERSINE DISTANCE
+# =========================================================
+
+def haversine_distance(
+    lat1,
+    lon1,
+    lat2,
+    lon2
+):
+
+    earth_radius = 6371
+
+    lat1 = math.radians(lat1)
+    lon1 = math.radians(lon1)
+
+    lat2 = math.radians(lat2)
+    lon2 = math.radians(lon2)
+
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+
+    a = (
+        math.sin(dlat / 2) ** 2
+        +
+        math.cos(lat1)
+        *
+        math.cos(lat2)
+        *
+        math.sin(dlon / 2) ** 2
+    )
+
+    return (
+        earth_radius
+        *
+        2
+        *
+        math.atan2(
+            math.sqrt(a),
+            math.sqrt(1 - a)
+        )
+    )
+
+
+# =========================================================
+# REAL ROAD ROUTE
+# OSRM
+# =========================================================
+
+def get_driving_route(start, end):
+
+    url = (
+        "https://router.project-osrm.org/"
+        "route/v1/driving/"
+        f"{start['lng']},{start['lat']};"
+        f"{end['lng']},{end['lat']}"
+    )
+
+    try:
+
+        response = requests.get(
+            url,
+            params={
+                "alternatives": "true",
+                "steps": "false",
+                "overview": "false"
+            },
+            timeout=15
+        )
+
+        response.raise_for_status()
+
+        data = response.json()
+
+        if data.get("code") != "Ok":
+            return []
+
+        return data.get("routes", [])
+
+    except Exception:
+
+        return []
+
+
+# =========================================================
+# TRANSPORT CALCULATION
+# =========================================================
+
+def calculate_transport(
+    distance_km,
+    mode,
+    driving_minutes=None
+):
+
+    transport = TRANSPORTS.get(mode)
+
+    if not transport:
+
+        mode = "taxi"
+
+        transport = TRANSPORTS[mode]
+
+    road_modes = {
+        "bike",
+        "auto",
+        "taxi",
+        "car",
+        "bus",
+        "van"
     }
-    search_query = query
-    for key, value in category_map.items():
-        if key in q_lower:
-            search_query = value
-            break
 
-    is_food = any(word in q_lower for word in [
-        "food", "restaurant", "restaurants", "cafe", "café", "vegan", "vegetarian", "halal",
-        "pizza", "burger", "breakfast", "lunch", "dinner"
-    ])
-    if is_food and budget is not None:
-        search_query += f" under Rs {int(budget) if budget.is_integer() else budget:g} per person"
+    if (
+        mode in road_modes
+        and driving_minutes is not None
+    ):
 
-    params = {
-        "engine": "google_maps", "type": "search", "q": search_query, "hl": "en", "gl": "in"
-    }
-    if open_now:
-        params["open_state"] = "now"
-    if has_coordinates:
-        params["ll"] = f"@{lat:.7f},{lng:.7f},16z"
+        duration_minutes = max(
+            1,
+            round(driving_minutes)
+        )
+
     else:
-        params["location"] = location
-        params["z"] = "14"
 
-    data = serpapi_search(params)
-    used_fallback = False
-    if data.get("error"):
-        # SerpApi is optional for the local demo. Fall back to free OSM data.
-        data = osm_search(search_query, lat=lat, lng=lng, location=location)
-        used_fallback = True
-        if data.get("error"):
-            original_error = data.get("error")
-            return jsonify({
-                "error": original_error,
-                "serpapi_used": bool(get_serpapi_key()),
-                "fallback": True,
-            }), 502
+        duration_minutes = max(
+            1,
+            round(
+                (distance_km / transport["speed"])
+                * 60
+            )
+        )
 
-    places = []
-    for item in (data.get("local_results") or [])[:20]:
-        coordinates = item.get("gps_coordinates") or {}
-        links = item.get("links") or {}
-        place_lat = coordinates.get("latitude", item.get("latitude"))
-        place_lng = coordinates.get("longitude", item.get("longitude"))
+    cost = (
+        transport["base_cost"]
+        +
+        distance_km
+        *
+        transport["cost_per_km"]
+    )
 
-        street_view_url = item.get("street_view_url")
-        satellite_url = item.get("satellite_url")
-        if place_lat is not None and place_lng is not None:
-            street_view_url = street_view_url or f"https://www.google.com/maps/@?api=1&map_action=pano&viewpoint={place_lat}%2C{place_lng}&heading=0&pitch=0&fov=85"
-            satellite_url = satellite_url or f"https://www.google.com/maps/@?api=1&map_action=map&center={place_lat}%2C{place_lng}&zoom=18&basemap=satellite"
+    return {
 
-        places.append({
-            "title": item.get("title"), "rating": item.get("rating"), "reviews": item.get("reviews"),
-            "price": item.get("price"), "type": item.get("type"), "address": item.get("address"),
-            "phone": item.get("phone"), "open_state": item.get("open_state"), "hours": item.get("hours"),
-            "description": item.get("description"), "thumbnail": item.get("thumbnail"),
-            "data_id": item.get("data_id"), "latitude": place_lat, "longitude": place_lng,
-            "website": links.get("website") or item.get("website"),
-            "directions": links.get("directions") or item.get("directions") or (f"https://www.google.com/maps/dir/?api=1&destination={place_lat},{place_lng}" if place_lat is not None else None),
-            "street_view_url": street_view_url, "satellite_url": satellite_url,
+        "mode": mode,
+
+        "label": transport["label"],
+
+        "icon": transport["icon"],
+
+        "distance_km": round(
+            distance_km,
+            2
+        ),
+
+        "duration_minutes":
+            duration_minutes,
+
+        "estimated_cost":
+            round(cost)
+    }
+
+
+# =========================================================
+# SMART JOURNEY PLANNER
+# =========================================================
+
+@app.route(
+    "/api/journey-plan",
+    methods=["POST"]
+)
+def journey_plan():
+
+    data = request.get_json(
+        silent=True
+    ) or {}
+
+    from_location = str(
+        data.get("from", "")
+    ).strip()
+
+    to_location = str(
+        data.get("to", "")
+    ).strip()
+
+    mode = str(
+        data.get("mode", "walking")
+    ).strip().lower()
+
+    reach_by = data.get("reach_by")
+
+    try:
+
+        budget = float(
+            data.get("budget", 0)
+        )
+
+    except (
+        TypeError,
+        ValueError
+    ):
+
+        return jsonify({
+            "success": False,
+            "error": "Please enter a valid budget."
+        }), 400
+
+
+    # -----------------------------
+    # VALIDATION
+    # -----------------------------
+
+    if not from_location:
+
+        return jsonify({
+            "success": False,
+            "error": "Please enter your starting location."
+        }), 400
+
+
+    if not to_location:
+
+        return jsonify({
+            "success": False,
+            "error": "Please enter your destination."
+        }), 400
+
+
+    if (
+        not math.isfinite(budget)
+        or budget < 0
+    ):
+
+        return jsonify({
+            "success": False,
+            "error": "Please enter a valid budget."
+        }), 400
+
+
+    if mode not in TRANSPORTS:
+
+        return jsonify({
+            "success": False,
+            "error": "Invalid transport mode."
+        }), 400
+
+
+    # -----------------------------
+    # GEOCODE START
+    # -----------------------------
+
+    start = geocode_location(
+        from_location
+    )
+
+    if not start:
+
+        return jsonify({
+            "success": False,
+            "error":
+                f"Could not find '{from_location}'."
+        }), 400
+
+
+    # -----------------------------
+    # GEOCODE DESTINATION
+    # -----------------------------
+
+    destination = geocode_location(
+        to_location
+    )
+
+    if not destination:
+
+        return jsonify({
+            "success": False,
+            "error":
+                f"Could not find '{to_location}'."
+        }), 400
+
+
+    # -----------------------------
+    # ROAD ROUTE
+    # -----------------------------
+
+    routes = get_driving_route(
+        start,
+        destination
+    )
+
+
+    if routes:
+
+        road_distance_km = (
+            routes[0]["distance"]
+            / 1000
+        )
+
+        road_duration_minutes = (
+            routes[0]["duration"]
+            / 60
+        )
+
+    else:
+
+        straight_distance = (
+            haversine_distance(
+                start["lat"],
+                start["lng"],
+                destination["lat"],
+                destination["lng"]
+            )
+        )
+
+        road_distance_km = max(
+            0.1,
+            straight_distance * 1.25
+        )
+
+        road_duration_minutes = None
+
+
+    # -----------------------------
+    # SELECTED TRANSPORT
+    # -----------------------------
+
+    selected = calculate_transport(
+        road_distance_km,
+        mode,
+        road_duration_minutes
+    )
+
+
+    # -----------------------------
+    # BUDGET
+    # -----------------------------
+
+    remaining = round(
+        budget
+        -
+        selected["estimated_cost"]
+    )
+
+    within_budget = (
+        remaining >= 0
+    )
+
+
+    if within_budget:
+
+        budget_message = (
+            "Your journey fits within "
+            "your budget. "
+            f"You have ₹{remaining:,} "
+            "remaining."
+        )
+
+    else:
+
+        budget_message = (
+            f"This journey is "
+            f"₹{abs(remaining):,} "
+            "over your budget. "
+            "Try a lower-cost transport "
+            "option below."
+        )
+
+
+    # -----------------------------
+    # COMPARE TRANSPORT
+    # -----------------------------
+
+    comparison = []
+
+    for transport_mode in TRANSPORTS:
+
+        item = calculate_transport(
+            road_distance_km,
+            transport_mode,
+            road_duration_minutes
+        )
+
+        item["within_budget"] = (
+            item["estimated_cost"]
+            <= budget
+        )
+
+        comparison.append(item)
+
+
+    # -----------------------------
+    # ALTERNATIVES
+    # -----------------------------
+
+    alternatives = [
+
+        item
+
+        for item in comparison
+
+        if (
+            item["mode"] != mode
+            and
+            item["within_budget"]
+        )
+
+    ]
+
+    alternatives.sort(
+        key=lambda x:
+            x["estimated_cost"]
+    )
+
+
+    # -----------------------------
+    # RESPONSE
+    # -----------------------------
+
+    return jsonify({
+
+        "success": True,
+
+        "from": from_location,
+
+        "to": to_location,
+
+        "mode":
+            selected["mode"],
+
+        "mode_label":
+            selected["label"],
+
+        "distance_km":
+            selected["distance_km"],
+
+        "duration_minutes":
+            selected["duration_minutes"],
+
+        "estimated_cost":
+            selected["estimated_cost"],
+
+        "budget":
+            round(budget),
+
+        "remaining":
+            remaining,
+
+        "within_budget":
+            within_budget,
+
+        "budget_message":
+            budget_message,
+
+        "comparison":
+            comparison,
+
+        "alternatives":
+            alternatives,
+
+        "reach_by":
+            reach_by,
+
+        "note":
+            "Distance and travel time use "
+            "a real road route when available. "
+            "Transport costs are estimates and "
+            "actual fares may vary."
+    })
+
+
+# =========================================================
+# COMPARE YOUR JOURNEY
+# =========================================================
+
+@app.route(
+    "/api/directions",
+    methods=["GET"]
+)
+def directions():
+
+    start_text = request.args.get(
+        "start",
+        ""
+    ).strip()
+
+    end_text = request.args.get(
+        "end",
+        ""
+    ).strip()
+
+
+    if not start_text or not end_text:
+
+        return jsonify({
+            "success": False,
+            "error":
+                "Please enter both starting "
+                "point and destination."
+        }), 400
+
+
+    start = geocode_location(
+        start_text
+    )
+
+    end = geocode_location(
+        end_text
+    )
+
+
+    if not start:
+
+        return jsonify({
+            "success": False,
+            "error":
+                f"Could not find '{start_text}'."
+        }), 400
+
+
+    if not end:
+
+        return jsonify({
+            "success": False,
+            "error":
+                f"Could not find '{end_text}'."
+        }), 400
+
+
+    routes = get_driving_route(
+        start,
+        end
+    )
+
+
+    if not routes:
+
+        return jsonify({
+            "success": False,
+            "error":
+                "No road route could be "
+                "found for these locations."
+        }), 404
+
+
+    results = []
+
+
+    for index, route in enumerate(
+        routes[:3],
+        start=1
+    ):
+
+        distance_km = (
+            route["distance"]
+            / 1000
+        )
+
+        duration_minutes = round(
+            route["duration"]
+            / 60
+        )
+
+        hours = (
+            duration_minutes
+            // 60
+        )
+
+        minutes = (
+            duration_minutes
+            % 60
+        )
+
+
+        if hours:
+
+            formatted_duration = (
+                f"{hours} hr "
+                f"{minutes} min"
+            )
+
+        else:
+
+            formatted_duration = (
+                f"{minutes} min"
+            )
+
+
+        estimated_drive_cost = round(
+            distance_km * 8
+        )
+
+
+        results.append({
+
+            "title":
+                (
+                    "Recommended Route"
+                    if index == 1
+                    else
+                    f"Alternative Route "
+                    f"{index - 1}"
+                ),
+
+            "distance":
+                f"{distance_km:.2f} km",
+
+            "formatted_distance":
+                f"{distance_km:.2f} km",
+
+            "duration":
+                formatted_duration,
+
+            "formatted_duration":
+                formatted_duration,
+
+            "price":
+                (
+                    "Est. driving cost "
+                    f"₹{estimated_drive_cost:,}"
+                ),
+
+            "estimated_cost":
+                estimated_drive_cost
         })
 
-    coords = data.get("coordinates")
-    if not coords and has_coordinates:
-        coords = {"latitude": lat, "longitude": lng}
 
     return jsonify({
-        "query": query, "search_query": search_query, "location": location,
-        "coordinates": coords, "budget": budget, "open_now": open_now,
-        "is_food": is_food, "results": places, "fallback": used_fallback,
-        "maps_url": (data.get("search_metadata") or {}).get("google_maps_url"),
+        "success": True,
+        "routes": results
     })
 
 
-@app.route("/api/reviews")
-def reviews():
-    data_id = request.args.get("data_id", "").strip()
-    if not data_id:
-        return jsonify({"error": "Reviews are available for SerpApi results only."}), 400
-    data = serpapi_search({"engine": "google_maps_reviews", "data_id": data_id, "hl": "en", "num": 8})
-    if data.get("error"):
-        return jsonify({"error": "Live reviews require a valid SerpApi key."}), 502
-    return jsonify({"reviews": [{"rating": r.get("rating"), "date": r.get("date"), "snippet": r.get("snippet")} for r in data.get("reviews", [])]})
+# =========================================================
+# SERPAPI LOCAL SEARCH
+# =========================================================
+
+@app.route(
+    "/api/search",
+    methods=["GET"]
+)
+def search_places():
+
+    query = request.args.get(
+        "q",
+        ""
+    ).strip()
+
+    location = request.args.get(
+        "location",
+        ""
+    ).strip()
+
+    lat = request.args.get(
+        "lat"
+    )
+
+    lng = request.args.get(
+        "lng"
+    )
+
+    open_now = request.args.get(
+        "open_now",
+        "false"
+    )
 
 
-@app.route("/api/directions")
-def directions():
-    start = request.args.get("start", "").strip()
-    end = request.args.get("end", "").strip()
-    if not start or not end:
-        return jsonify({"error": "Start and destination are required."}), 400
+    if not query:
 
-    data = serpapi_search({"engine": "google_maps_directions", "start_addr": start, "end_addr": end, "hl": "en", "gl": "in"})
-    if not data.get("error"):
-        routes = []
-        for route in data.get("directions", []):
-            routes.append({
-                "title": route.get("title"), "distance": route.get("distance"), "duration": route.get("duration"),
-                "price": route.get("price"), "formatted_distance": route.get("formatted_distance"),
-                "formatted_duration": route.get("formatted_duration"),
+        query = "places near me"
+
+
+    lower_query = query.lower()
+
+
+    # Taxi / Cab
+    is_taxi_search = (
+        "taxi" in lower_query
+        or
+        "cab" in lower_query
+    )
+
+
+    if is_taxi_search:
+
+        query = "taxi near me"
+
+
+    if not SERPAPI_KEY:
+
+        return jsonify({
+            "success": False,
+            "error":
+                "SerpApi key is not configured."
+        }), 500
+
+
+    params = {
+
+        "engine":
+            "google_maps",
+
+        "type":
+            "search",
+
+        "q":
+            query,
+
+        "api_key":
+            SERPAPI_KEY
+    }
+
+
+    # -----------------------------
+    # CURRENT LOCATION
+    # -----------------------------
+
+    if lat and lng:
+
+        try:
+
+            lat_value = float(lat)
+
+            lng_value = float(lng)
+
+
+            params["ll"] = (
+                f"@{lat_value},"
+                f"{lng_value},15z"
+            )
+
+
+            # Important for nearby taxi
+            if is_taxi_search:
+
+                params["nearby"] = "true"
+
+
+        except ValueError:
+
+            return jsonify({
+                "success": False,
+                "error":
+                    "Invalid location coordinates."
+            }), 400
+
+
+    elif location:
+
+        params["q"] = (
+            f"{query} near {location}"
+        )
+
+
+    # -----------------------------
+    # OPEN NOW
+    # -----------------------------
+
+    if str(
+        open_now
+    ).lower() in (
+        "true",
+        "1"
+    ):
+
+        params["open_state"] = "open"
+
+
+    try:
+
+        response = requests.get(
+            "https://serpapi.com/search.json",
+            params=params,
+            timeout=20
+        )
+
+        response.raise_for_status()
+
+        data = response.json()
+
+
+        results = []
+
+
+        for place in data.get(
+            "local_results",
+            []
+        ):
+
+            gps = (
+                place.get(
+                    "gps_coordinates"
+                )
+                or {}
+            )
+
+
+            latitude = gps.get(
+                "latitude"
+            )
+
+            longitude = gps.get(
+                "longitude"
+            )
+
+
+            results.append({
+
+                "title":
+                    place.get(
+                        "title",
+                        ""
+                    ),
+
+                "rating":
+                    place.get(
+                        "rating"
+                    ),
+
+                "reviews":
+                    place.get(
+                        "reviews"
+                    ),
+
+                "price":
+                    place.get(
+                        "price"
+                    ),
+
+                "type":
+                    place.get(
+                        "type"
+                    ),
+
+                "address":
+                    place.get(
+                        "address"
+                    ),
+
+                "phone":
+                    place.get(
+                        "phone"
+                    ),
+
+                "open_state":
+                    place.get(
+                        "open_state"
+                    ),
+
+                "hours":
+                    place.get(
+                        "hours"
+                    ),
+
+                "thumbnail":
+                    place.get(
+                        "thumbnail"
+                    ),
+
+                "data_id":
+                    place.get(
+                        "data_id"
+                    ),
+
+                "latitude":
+                    latitude,
+
+                "longitude":
+                    longitude,
+
+                "website":
+                    place.get(
+                        "website"
+                    ),
+
+                "directions":
+                    place.get(
+                        "directions"
+                    ),
+
+                "street_view_url":
+
+                    (
+                        "https://www.google.com/maps/"
+                        "@?api=1&map_action=pano"
+                        f"&viewpoint="
+                        f"{latitude},{longitude}"
+                    )
+
+                    if (
+                        latitude is not None
+                        and
+                        longitude is not None
+                    )
+
+                    else None,
+
+                "satellite_url":
+
+                    (
+                        "https://www.google.com/maps/"
+                        "@?api=1&map_action=map"
+                        f"&center="
+                        f"{latitude},{longitude}"
+                        "&zoom=18"
+                        "&basemap=satellite"
+                    )
+
+                    if (
+                        latitude is not None
+                        and
+                        longitude is not None
+                    )
+
+                    else None
             })
-        return jsonify({"routes": routes})
 
-    # Free fallback: geocode both ends and use OSRM public routing.
-    start_coords = geocode_location(start)
-    end_coords = geocode_location(end)
-    if not start_coords or not end_coords:
-        return jsonify({"error": "Could not locate one of the route points."}), 502
+
+        coordinates = None
+
+
+        if lat and lng:
+
+            try:
+
+                coordinates = {
+
+                    "latitude":
+                        float(lat),
+
+                    "longitude":
+                        float(lng)
+                }
+
+            except ValueError:
+
+                pass
+
+
+        return jsonify({
+
+            "success": True,
+
+            "query":
+                query,
+
+            "results":
+                results,
+
+            "coordinates":
+                coordinates
+        })
+
+
+    except requests.RequestException as error:
+
+        return jsonify({
+
+            "success": False,
+
+            "error":
+                "Unable to connect to SerpApi.",
+
+            "details":
+                str(error)
+
+        }), 502
+
+
+# =========================================================
+# REVIEWS
+# =========================================================
+
+@app.route(
+    "/api/reviews",
+    methods=["GET"]
+)
+def reviews():
+
+    data_id = request.args.get(
+        "data_id",
+        ""
+    ).strip()
+
+
+    if not data_id:
+
+        return jsonify({
+            "success": False,
+            "error":
+                "Missing place ID."
+        }), 400
+
+
+    if not SERPAPI_KEY:
+
+        return jsonify({
+            "success": False,
+            "error":
+                "SerpApi key is not configured."
+        }), 500
+
+
     try:
-        url = f"https://router.project-osrm.org/route/v1/driving/{start_coords[1]},{start_coords[0]};{end_coords[1]},{end_coords[0]}"
-        r = requests.get(url, params={"overview": "false"}, timeout=20)
-        r.raise_for_status()
-        data = r.json()
-        route = (data.get("routes") or [None])[0]
-        if not route:
-            return jsonify({"routes": []})
-        km = route["distance"] / 1000
-        mins = route["duration"] / 60
-        return jsonify({"routes": [{
-            "title": "Driving route", "distance": f"{km:.1f} km", "duration": f"{mins:.0f} min",
-            "price": "", "formatted_distance": f"{km:.1f} km", "formatted_duration": f"{mins:.0f} min"
-        }]})
-    except requests.RequestException:
-        return jsonify({"error": "Route service is temporarily unavailable."}), 502
+
+        response = requests.get(
+
+            "https://serpapi.com/search.json",
+
+            params={
+
+                "engine":
+                    "google_maps_reviews",
+
+                "data_id":
+                    data_id,
+
+                "api_key":
+                    SERPAPI_KEY
+            },
+
+            timeout=20
+        )
 
 
-@app.route("/api/triptwin", methods=["POST"])
-def triptwin():
-    data = request.get_json(silent=True) or {}
-    try:
-        budget = float(data.get("budget", 2000)); spending = float(data.get("spending", 1400))
-        travel_time = float(data.get("travel_time", 42)); schedule_gap = float(data.get("schedule_gap", 15))
-    except (TypeError, ValueError):
-        return jsonify({"error": "Trip values must be numbers."}), 400
-    checks = {"Budget": spending <= budget, "Travel Time": travel_time <= 90, "Schedule Buffer": schedule_gap >= 10}
-    return jsonify({"checks": checks, "status": "Plan is ready to test" if all(checks.values()) else "Plan needs adjustment"})
+        response.raise_for_status()
 
 
-@app.route("/api/simulate", methods=["POST"])
-def simulate():
-    data = request.get_json(silent=True) or {}
-    scenario = data.get("scenario", "Reduce Budget")
-    try:
-        budget = float(data.get("budget", 15000))
-    except (TypeError, ValueError):
-        return jsonify({"error": "Budget must be a number."}), 400
-    result = {"scenario": scenario, "original": budget, "simulated": budget, "walking": "6.4 km", "places": 7, "changes": []}
-    if scenario == "Reduce Budget":
-        result.update(simulated=budget-3000, walking="3.8 km", places=6, changes=["Replace two private cab journeys with public transport.", "Choose a nearby lower-cost attraction.", "Move the food stop closer to the route."])
-    elif scenario == "Remove Taxi":
-        result.update(simulated=budget-1800, walking="5.1 km", changes=["Replace taxi journeys with public transport.", "Move one stop closer to a metro corridor."])
-    elif scenario == "Less Walking":
-        result.update(simulated=budget+500, walking="2.0 km", changes=["Prioritize places close to stations.", "Use one short paid transfer."])
-    elif scenario == "Restaurant Closed":
-        result["changes"] = ["Find another matching restaurant.", "Recalculate the evening route."]
-    return jsonify(result)
+        data = response.json()
 
 
-@app.route("/api/ai-guide", methods=["POST"])
+        return jsonify({
+
+            "success":
+                True,
+
+            "reviews":
+                data.get(
+                    "reviews",
+                    []
+                )
+        })
+
+
+    except Exception as error:
+
+        return jsonify({
+
+            "success":
+                False,
+
+            "error":
+                str(error)
+
+        }), 502
+
+
+# =========================================================
+# LOCAL AI GUIDE
+# NO OPENAI CREDITS REQUIRED
+# =========================================================
+
+def local_ai_guide(message):
+
+    text = message.lower()
+
+
+    if (
+        "taxi" in text
+        or
+        "cab" in text
+        or
+        "uber" in text
+        or
+        "ola" in text
+    ):
+
+        return (
+            "I can help you find nearby taxis. "
+            "Use Explore with 'taxi near me' "
+            "and allow your current location. "
+            "NaviSphere searches nearby "
+            "taxi/cab listings through SerpApi."
+        )
+
+
+    if (
+        "food" in text
+        or
+        "restaurant" in text
+        or
+        "eat" in text
+        or
+        "cafe" in text
+    ):
+
+        return (
+            "Use the Food section to search "
+            "nearby restaurants and cafes. "
+            "You can also enter a budget."
+        )
+
+
+    if (
+        "route" in text
+        or
+        "direction" in text
+        or
+        "distance" in text
+        or
+        "travel" in text
+    ):
+
+        return (
+            "Use Compare Your Journey to enter "
+            "your starting point and destination. "
+            "NaviSphere calculates road routes, "
+            "distance and estimated travel time."
+        )
+
+
+    if (
+        "hospital" in text
+        or
+        "medical" in text
+    ):
+
+        return (
+            "Use the Hospitals quick-search "
+            "option with location enabled "
+            "to find nearby hospitals."
+        )
+
+
+    if (
+        "pharmacy" in text
+        or
+        "medicine" in text
+    ):
+
+        return (
+            "Use the Pharmacy quick-search "
+            "option to find nearby pharmacies."
+        )
+
+
+    return (
+        "I can help you find nearby services, "
+        "compare routes, estimate travel costs "
+        "and plan a journey based on your budget."
+    )
+
+
+# =========================================================
+# AI GUIDE
+# =========================================================
+
+@app.route(
+    "/api/ai-guide",
+    methods=["POST"]
+)
 def ai_guide():
-    if not openai_client:
-        return jsonify({"error": "OPENAI_API_KEY is not configured. Add it to .env to enable NaviSphere AI chat."}), 503
-    data = request.get_json(silent=True) or {}
-    user_message = str(data.get("message", "")).strip()
-    if not user_message:
-        return jsonify({"error": "Please enter a message."}), 400
-    system_prompt = """You are NaviSphere AI, a practical local-discovery assistant. Be concise. Never invent businesses, addresses, prices, routes, opening hours, ratings, or reviews. Help users understand options."""
-    try:
-        response = openai_client.responses.create(model="gpt-5.6-luna", instructions=system_prompt, input=user_message)
-        return jsonify({"success": True, "reply": response.output_text})
-    except Exception as exc:
-        return jsonify({"success": False, "error": str(exc)}), 502
 
+    data = request.get_json(
+        silent=True
+    ) or {}
+
+
+    message = str(
+        data.get(
+            "message",
+            ""
+        )
+    ).strip()
+
+
+    if not message:
+
+        return jsonify({
+            "success": False,
+            "error":
+                "Please tell NaviSphere what you need."
+        }), 400
+
+
+    # Local fallback.
+    # OpenAI is intentionally not required.
+
+    answer = local_ai_guide(
+        message
+    )
+
+
+    return jsonify({
+
+        "success":
+            True,
+
+        "available":
+            True,
+
+        "reply":
+            answer,
+
+        "answer":
+            answer,
+
+        "source":
+            "NaviSphere local guide"
+    })
+
+
+# =========================================================
+# RUN
+# =========================================================
 
 if __name__ == "__main__":
-    app.run(debug=True, host="127.0.0.1", port=5000)
+
+    port = int(
+        os.environ.get(
+            "PORT",
+            5000
+        )
+    )
+
+
+    app.run(
+
+        host="0.0.0.0",
+
+        port=port,
+
+        debug=True
+    ) 
