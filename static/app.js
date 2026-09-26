@@ -1059,3 +1059,942 @@ function formatAIResponse(text) {
         .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
 
 } 
+/* =========================================================
+   SMART JOURNEY PLANNER — FIXED
+========================================================= */
+
+document.addEventListener("DOMContentLoaded", () => {
+
+    const planButton =
+        document.getElementById("planJourneyBtn");
+
+    if (!planButton) {
+        return;
+    }
+
+
+    // =====================================================
+    // GET ELEMENTS SAFELY
+    // =====================================================
+
+    const fromInput =
+        document.getElementById("journeyFrom");
+
+    const toInput =
+        document.getElementById("journeyTo");
+
+    const modeInput =
+        document.getElementById("journeyMode");
+
+    const budgetInput =
+        document.getElementById("journeyBudget");
+
+    // This field is OPTIONAL.
+    // It will never cause a null.value error.
+    const reachByInput =
+        document.getElementById("journeyReachBy");
+
+
+    const loading =
+        document.getElementById("journeyLoading");
+
+    const errorBox =
+        document.getElementById("journeyError");
+
+    const result =
+        document.getElementById("journeyResult");
+
+
+    const routeTitle =
+        document.getElementById(
+            "journeyRouteTitle"
+        );
+
+    const distance =
+        document.getElementById(
+            "journeyDistance"
+        );
+
+    const time =
+        document.getElementById(
+            "journeyTime"
+        );
+
+    const cost =
+        document.getElementById(
+            "journeyCost"
+        );
+
+    const remaining =
+        document.getElementById(
+            "journeyRemaining"
+        );
+
+    const budgetStatus =
+        document.getElementById(
+            "journeyBudgetStatus"
+        );
+
+    const budgetMessage =
+        document.getElementById(
+            "journeyBudgetMessage"
+        );
+
+    const alternativeList =
+        document.getElementById(
+            "alternativeList"
+        );
+
+    const comparisonBody =
+        document.getElementById(
+            "transportComparisonBody"
+        );
+
+
+    // =====================================================
+    // SAFE VALUE READER
+    // =====================================================
+
+    function getValue(element) {
+
+        if (!element) {
+            return "";
+        }
+
+        return String(
+            element.value || ""
+        ).trim();
+    }
+
+
+    // =====================================================
+    // MONEY FORMAT
+    // =====================================================
+
+    function formatMoney(value) {
+
+        return Number(
+            value || 0
+        ).toLocaleString(
+            "en-IN"
+        );
+    }
+
+
+    // =====================================================
+    // TIME FORMAT
+    // =====================================================
+
+    function formatDuration(minutes) {
+
+        const totalMinutes =
+            Math.max(
+                0,
+                Math.round(
+                    Number(minutes) || 0
+                )
+            );
+
+
+        if (totalMinutes < 60) {
+
+            return (
+                `${totalMinutes} min`
+            );
+        }
+
+
+        const hours =
+            Math.floor(
+                totalMinutes / 60
+            );
+
+        const mins =
+            totalMinutes % 60;
+
+
+        if (mins === 0) {
+
+            return (
+                `${hours} hr`
+            );
+        }
+
+
+        return (
+            `${hours} hr ${mins} min`
+        );
+    }
+
+
+    // =====================================================
+    // HTML ESCAPE
+    // =====================================================
+
+    function escapeHtml(value) {
+
+        return String(
+            value ?? ""
+        )
+        .replace(
+            /&/g,
+            "&amp;"
+        )
+        .replace(
+            /</g,
+            "&lt;"
+        )
+        .replace(
+            />/g,
+            "&gt;"
+        )
+        .replace(
+            /"/g,
+            "&quot;"
+        )
+        .replace(
+            /'/g,
+            "&#039;"
+        );
+    }
+
+
+    // =====================================================
+    // ERROR
+    // =====================================================
+
+    function showJourneyError(message) {
+
+        if (!errorBox) {
+            return;
+        }
+
+        errorBox.textContent =
+            message;
+
+        errorBox.style.display =
+            "block";
+    }
+
+
+    function hideJourneyError() {
+
+        if (!errorBox) {
+            return;
+        }
+
+        errorBox.textContent =
+            "";
+
+        errorBox.style.display =
+            "none";
+    }
+
+
+    // =====================================================
+    // BUTTON TEXT
+    // =====================================================
+
+    function setButtonText(text) {
+
+        const buttonSpan =
+            planButton.querySelector(
+                "span"
+            );
+
+
+        if (buttonSpan) {
+
+            buttonSpan.textContent =
+                text;
+
+        } else {
+
+            planButton.textContent =
+                text;
+        }
+    }
+
+
+    // =====================================================
+    // PLAN JOURNEY
+    // =====================================================
+
+    planButton.addEventListener(
+        "click",
+        async () => {
+
+            // ---------------------------------------------
+            // READ VALUES SAFELY
+            // ---------------------------------------------
+
+            const from =
+                getValue(fromInput);
+
+            const to =
+                getValue(toInput);
+
+            const mode =
+                modeInput
+                    ? modeInput.value
+                    : "walking";
+
+            const budgetText =
+                getValue(budgetInput);
+
+            const budget =
+                Number(budgetText);
+
+            // Optional field.
+            // Even if HTML doesn't contain it,
+            // this will NOT crash.
+            const reachBy =
+                getValue(reachByInput);
+
+
+            hideJourneyError();
+
+
+            // ---------------------------------------------
+            // VALIDATE FROM
+            // ---------------------------------------------
+
+            if (!from) {
+
+                showJourneyError(
+                    "Please enter your starting location."
+                );
+
+                if (fromInput) {
+                    fromInput.focus();
+                }
+
+                return;
+            }
+
+
+            // ---------------------------------------------
+            // VALIDATE TO
+            // ---------------------------------------------
+
+            if (!to) {
+
+                showJourneyError(
+                    "Please enter your destination."
+                );
+
+                if (toInput) {
+                    toInput.focus();
+                }
+
+                return;
+            }
+
+
+            // ---------------------------------------------
+            // VALIDATE BUDGET
+            // ---------------------------------------------
+
+            if (
+                !budgetText
+                ||
+                !Number.isFinite(budget)
+                ||
+                budget < 0
+            ) {
+
+                showJourneyError(
+                    "Please enter a valid budget."
+                );
+
+                if (budgetInput) {
+                    budgetInput.focus();
+                }
+
+                return;
+            }
+
+
+            // ---------------------------------------------
+            // LOADING
+            // ---------------------------------------------
+
+            if (result) {
+
+                result.style.display =
+                    "none";
+            }
+
+
+            if (loading) {
+
+                loading.style.display =
+                    "flex";
+            }
+
+
+            planButton.disabled =
+                true;
+
+
+            setButtonText(
+                "Planning..."
+            );
+
+
+            // ---------------------------------------------
+            // API REQUEST
+            // ---------------------------------------------
+
+            try {
+
+                const response =
+                    await fetch(
+                        "/api/journey-plan",
+                        {
+                            method: "POST",
+
+                            headers: {
+                                "Content-Type":
+                                    "application/json"
+                            },
+
+                            body:
+                                JSON.stringify({
+
+                                    from:
+                                        from,
+
+                                    to:
+                                        to,
+
+                                    mode:
+                                        mode,
+
+                                    budget:
+                                        budget,
+
+                                    reach_by:
+                                        reachBy || null
+                                })
+                        }
+                    );
+
+
+                // -----------------------------------------
+                // READ SERVER RESPONSE
+                // -----------------------------------------
+
+                const raw =
+                    await response.text();
+
+
+                let data;
+
+
+                try {
+
+                    data =
+                        JSON.parse(
+                            raw
+                        );
+
+                } catch (parseError) {
+
+                    throw new Error(
+                        `Server returned invalid JSON (${response.status}).`
+                    );
+                }
+
+
+                // -----------------------------------------
+                // SERVER ERROR
+                // -----------------------------------------
+
+                if (
+                    !response.ok
+                    ||
+                    data.success === false
+                ) {
+
+                    throw new Error(
+                        data.error
+                        ||
+                        "Unable to plan this journey."
+                    );
+                }
+
+
+                // -----------------------------------------
+                // DISPLAY
+                // -----------------------------------------
+
+                displayJourneyResult(
+                    data
+                );
+
+
+            } catch (error) {
+
+                console.error(
+                    "Journey planner error:",
+                    error
+                );
+
+
+                showJourneyError(
+                    error.message
+                    ||
+                    "Something went wrong. Please try again."
+                );
+
+
+            } finally {
+
+                if (loading) {
+
+                    loading.style.display =
+                        "none";
+                }
+
+
+                planButton.disabled =
+                    false;
+
+
+                setButtonText(
+                    "Plan My Journey"
+                );
+            }
+
+        }
+    );
+
+
+    // =====================================================
+    // DISPLAY RESULT
+    // =====================================================
+
+    function displayJourneyResult(
+        data
+    ) {
+
+        if (!result) {
+            return;
+        }
+
+
+        result.style.display =
+            "block";
+
+
+        // ---------------------------------------------
+        // ROUTE
+        // ---------------------------------------------
+
+        if (routeTitle) {
+
+            routeTitle.textContent =
+                `${data.from || ""} → ${data.to || ""}`;
+        }
+
+
+        // ---------------------------------------------
+        // DISTANCE
+        // ---------------------------------------------
+
+        if (distance) {
+
+            distance.textContent =
+                `${Number(
+                    data.distance_km || 0
+                ).toFixed(2)} km`;
+        }
+
+
+        // ---------------------------------------------
+        // TIME
+        // ---------------------------------------------
+
+        if (time) {
+
+            time.textContent =
+                formatDuration(
+                    data.duration_minutes
+                );
+        }
+
+
+        // ---------------------------------------------
+        // COST
+        // ---------------------------------------------
+
+        if (cost) {
+
+            cost.textContent =
+                `₹${formatMoney(
+                    data.estimated_cost
+                )}`;
+        }
+
+
+        // ---------------------------------------------
+        // REMAINING BUDGET
+        // ---------------------------------------------
+
+        if (remaining) {
+
+            const remainingAmount =
+                Number(
+                    data.remaining || 0
+                );
+
+
+            if (remainingAmount >= 0) {
+
+                remaining.textContent =
+                    `₹${formatMoney(
+                        remainingAmount
+                    )}`;
+
+            } else {
+
+                remaining.textContent =
+                    `₹${formatMoney(
+                        Math.abs(
+                            remainingAmount
+                        )
+                    )} over`;
+            }
+        }
+
+
+        // ---------------------------------------------
+        // BUDGET STATUS
+        // ---------------------------------------------
+
+        const fitsBudget =
+            data.within_budget === true
+            ||
+            Number(
+                data.remaining
+            ) >= 0;
+
+
+        if (budgetStatus) {
+
+            if (fitsBudget) {
+
+                budgetStatus.textContent =
+                    "✓ Within Budget";
+
+                budgetStatus.className =
+                    "budget-status success";
+
+            } else {
+
+                budgetStatus.textContent =
+                    "⚠ Over Budget";
+
+                budgetStatus.className =
+                    "budget-status warning";
+            }
+        }
+
+
+        // ---------------------------------------------
+        // BUDGET MESSAGE
+        // ---------------------------------------------
+
+        if (budgetMessage) {
+
+            if (data.budget_message) {
+
+                budgetMessage.textContent =
+                    data.budget_message;
+
+            } else {
+
+                if (fitsBudget) {
+
+                    budgetMessage.textContent =
+                        `Your journey fits within your budget. You have ₹${formatMoney(
+                            data.remaining
+                        )} remaining.`;
+
+                } else {
+
+                    budgetMessage.textContent =
+                        `This journey is ₹${formatMoney(
+                            Math.abs(
+                                Number(
+                                    data.remaining || 0
+                                )
+                            )
+                        )} over your budget.`;
+                }
+            }
+        }
+
+
+        // ---------------------------------------------
+        // ALTERNATIVES
+        // ---------------------------------------------
+
+        renderAlternatives(
+            Array.isArray(
+                data.alternatives
+            )
+                ? data.alternatives
+                : []
+        );
+
+
+        // ---------------------------------------------
+        // COMPARISON
+        // ---------------------------------------------
+
+        renderComparison(
+            Array.isArray(
+                data.comparison
+            )
+                ? data.comparison
+                : [],
+
+            data.mode
+        );
+
+
+        // ---------------------------------------------
+        // SCROLL
+        // ---------------------------------------------
+
+        setTimeout(
+            () => {
+
+                result.scrollIntoView({
+                    behavior:
+                        "smooth",
+
+                    block:
+                        "start"
+                });
+
+            },
+            100
+        );
+    }
+
+
+    // =====================================================
+    // ALTERNATIVES
+    // =====================================================
+
+    function renderAlternatives(
+        alternatives
+    ) {
+
+        if (!alternativeList) {
+            return;
+        }
+
+
+        alternativeList.innerHTML =
+            "";
+
+
+        if (!alternatives.length) {
+
+            alternativeList.innerHTML = `
+
+                <div class="alternative-card">
+
+                    <div class="alternative-title">
+                        No cheaper alternative found
+                    </div>
+
+                    <div class="alternative-details">
+                        Try increasing your budget
+                        or choosing another
+                        transport mode.
+                    </div>
+
+                </div>
+
+            `;
+
+            return;
+        }
+
+
+        alternatives
+            .slice(0, 5)
+            .forEach(
+                item => {
+
+                    const card =
+                        document.createElement(
+                            "div"
+                        );
+
+
+                    card.className =
+                        "alternative-card";
+
+
+                    card.innerHTML = `
+
+                        <div class="alternative-title">
+
+                            ${escapeHtml(
+                                item.icon ||
+                                "🚗"
+                            )}
+
+                            ${escapeHtml(
+                                item.label ||
+                                item.mode ||
+                                "Option"
+                            )}
+
+                        </div>
+
+
+                        <div class="alternative-details">
+
+                            ${Number(
+                                item.distance_km || 0
+                            ).toFixed(2)}
+                            km
+
+                            ·
+
+                            ${formatDuration(
+                                item.duration_minutes
+                            )}
+
+                            ·
+
+                            ₹${formatMoney(
+                                item.estimated_cost
+                            )}
+
+                        </div>
+
+                    `;
+
+
+                    alternativeList.appendChild(
+                        card
+                    );
+
+                }
+            );
+    }
+
+
+    // =====================================================
+    // TRANSPORT COMPARISON
+    // =====================================================
+
+    function renderComparison(
+        comparison,
+        selectedMode
+    ) {
+
+        if (!comparisonBody) {
+            return;
+        }
+
+
+        comparisonBody.innerHTML =
+            "";
+
+
+        comparison.forEach(
+            item => {
+
+                if (!item) {
+                    return;
+                }
+
+
+                const row =
+                    document.createElement(
+                        "tr"
+                    );
+
+
+                // Highlight selected transport
+                if (
+                    item.mode ===
+                    selectedMode
+                ) {
+
+                    row.classList.add(
+                        "selected-row"
+                    );
+                }
+
+
+                // IMPORTANT:
+                // No N/A column.
+                // Only Transport / Distance /
+                // Time / Estimated Cost.
+
+                row.innerHTML = `
+
+                    <td>
+
+                        ${escapeHtml(
+                            item.icon ||
+                            "🚗"
+                        )}
+
+                        ${escapeHtml(
+                            item.label ||
+                            item.mode ||
+                            "Option"
+                        )}
+
+                    </td>
+
+
+                    <td>
+
+                        ${Number(
+                            item.distance_km || 0
+                        ).toFixed(2)}
+                        km
+
+                    </td>
+
+
+                    <td>
+
+                        ${formatDuration(
+                            item.duration_minutes
+                        )}
+
+                    </td>
+
+
+                    <td>
+
+                        ₹${formatMoney(
+                            item.estimated_cost
+                        )}
+
+                    </td>
+
+                `;
+
+
+                comparisonBody.appendChild(
+                    row
+                );
+            }
+        );
+    }
+
+}); 
