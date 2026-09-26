@@ -51,10 +51,6 @@
 
         <a href="#routes">Routes</a>
 
-        <a href="#triptwin">TripTwin</a>
-
-        <a href="#simulator">What-If</a>
-
     </nav>
 
     <button
@@ -86,10 +82,8 @@
         </h1>
 
         <p>
-
             Understand any place. Find what you need.
             Navigate with confidence.
-
         </p>
 
         <div class="hero-search">
@@ -113,6 +107,7 @@
         </div>
 
         <div class="location-tools">
+
             <button
                 id="locationButton"
                 class="location-button"
@@ -128,7 +123,13 @@
                 🍽️ Find food near me
             </button>
 
-            <span id="locationStatus" class="location-status">Location not selected</span>
+            <span
+                id="locationStatus"
+                class="location-status"
+            >
+                Location not selected
+            </span>
+
         </div>
 
         <div class="quick-actions">
@@ -149,15 +150,22 @@
                 💳 ATMs
             </button>
 
-            <button onclick="quickSearch('grocery stores')">
+            <button onclick="quickSearch('grocery stores')"> 
                 🛒 Groceries
             </button>
-
+           
+            <button onclick="quickSearch('taxi near me')">
+    🚕 Taxi
+            </button> 
         </div>
 
     </div>
 
 </section>
+
+
+<!-- AI GUIDE -->
+
 <section class="ai-guide-section">
 
     <div class="section-label">
@@ -186,13 +194,20 @@
 
     </div>
 
-    <div id="aiLoading" class="ai-loading">
+    <div
+        id="aiLoading"
+        class="ai-loading"
+    >
         NaviSphere is thinking...
     </div>
 
-    <div id="aiResponse" class="ai-response"></div>
+    <div
+        id="aiResponse"
+        class="ai-response"
+    ></div>
 
-</section> 
+</section>
+
 
 <!-- EXPLORE -->
 
@@ -203,9 +218,13 @@
 
     <div class="section-heading">
 
-        <span>01 · CITY LENS</span>
+        <span>
+            01 · CITY LENS
+        </span>
 
-        <h2>Explore This Place</h2>
+        <h2>
+            Explore This Place
+        </h2>
 
         <p>
             Discover what surrounds you using real-world
@@ -214,12 +233,21 @@
 
     </div>
 
+
     <div class="map-toolbar">
-        <button id="satelliteToggle" class="map-toggle" onclick="toggleSatellite()">
+
+        <button
+            id="satelliteToggle"
+            class="map-toggle"
+            onclick="toggleSatellite()"
+        >
             🛰️ Satellite
         </button>
 
-        <button class="map-toggle" onclick="useCurrentLocation(false)">
+        <button
+            class="map-toggle"
+            onclick="useCurrentLocation(false)"
+        >
             📍 Locate me
         </button>
 
@@ -233,17 +261,22 @@
         >
             📷 Street View
         </a>
+
     </div>
+
 
     <div class="explore-grid">
 
         <div id="map"></div>
 
+
         <div class="results-panel">
 
             <div class="panel-header">
 
-                <h3>Nearby Places</h3>
+                <h3>
+                    Nearby Places
+                </h3>
 
                 <span id="resultCount">
                     Ready
@@ -251,11 +284,14 @@
 
             </div>
 
+
             <div id="results">
 
                 <div class="empty-state">
 
-                    <div>🧭</div>
+                    <div>
+                        🧭
+                    </div>
 
                     <h3>
                         Tell NaviSphere what you need
@@ -274,24 +310,66 @@
 
     </div>
 
+
     <div class="visual-grounding">
-        <div class="visual-card">
-            <span class="visual-icon">🛰️</span>
-            <div>
-                <strong>Satellite context</strong>
-                <p>Switch the map to aerial imagery to understand buildings, roads and the surrounding area.</p>
-            </div>
-            <button class="visual-button" onclick="toggleSatellite()">View satellite</button>
-        </div>
 
         <div class="visual-card">
-            <span class="visual-icon">📷</span>
+
+            <span class="visual-icon">
+                🛰️
+            </span>
+
             <div>
-                <strong>Real street-level view</strong>
-                <p>Open the closest available Google Street View panorama for your location or a selected place.</p>
+
+                <strong>
+                    Satellite context
+                </strong>
+
+                <p>
+                    Switch the map to aerial imagery to understand
+                    buildings, roads and the surrounding area.
+                </p>
+
             </div>
-            <button class="visual-button" onclick="openCurrentStreetView()">Open 360° view</button>
+
+            <button
+                class="visual-button"
+                onclick="toggleSatellite()"
+            >
+                View satellite
+            </button>
+
         </div>
+
+
+        <div class="visual-card">
+
+            <span class="visual-icon">
+                📷
+            </span>
+
+            <div>
+
+                <strong>
+                    Real street-level view
+                </strong>
+
+                <p>
+                    Open the closest available Google Street View
+                    panorama for your location or a selected place.
+                </p>
+
+            </div>
+
+            <button
+                class="visual-button"
+                onclick="openCurrentStreetView()"
+            >
+                Open 360° view
+            </button>
+
+        </div>
+
     </div>
 
 </section>
@@ -306,9 +384,13 @@
 
     <div class="section-heading">
 
-        <span>02 · NEED FINDER</span>
+        <span>
+            02 · NEED FINDER
+        </span>
 
-        <h2>Find What Matters</h2>
+        <h2>
+            Find What Matters
+        </h2>
 
         <p>
             Quickly discover essential services in an unfamiliar place.
@@ -316,43 +398,93 @@
 
     </div>
 
+
     <div class="feature-grid">
 
+
         <div class="feature-card">
-            <div>🏥</div>
-            <h3>Hospitals</h3>
-            <p>Find nearby hospitals and understand where they are.</p>
+
+            <div>
+                🏥
+            </div>
+
+            <h3>
+                Hospitals
+            </h3>
+
+            <p>
+                Find nearby hospitals and understand where they are.
+            </p>
+
             <button onclick="quickSearch('hospitals')">
                 Find Hospitals
             </button>
+
         </div>
 
+
         <div class="feature-card">
-            <div>💊</div>
-            <h3>Pharmacies</h3>
-            <p>Locate pharmacies around your destination.</p>
+
+            <div>
+                💊
+            </div>
+
+            <h3>
+                Pharmacies
+            </h3>
+
+            <p>
+                Locate pharmacies around your destination.
+            </p>
+
             <button onclick="quickSearch('pharmacies')">
                 Find Pharmacies
             </button>
+
         </div>
 
+
         <div class="feature-card">
-            <div>🏧</div>
-            <h3>ATMs</h3>
-            <p>Find nearby cash access points.</p>
+
+            <div>
+                🏧
+            </div>
+
+            <h3>
+                ATMs
+            </h3>
+
+            <p>
+                Find nearby cash access points.
+            </p>
+
             <button onclick="quickSearch('ATMs')">
                 Find ATMs
             </button>
+
         </div>
 
+
         <div class="feature-card">
-            <div>🛒</div>
-            <h3>Groceries</h3>
-            <p>Discover supermarkets and grocery stores.</p>
+
+            <div>
+                🛒
+            </div>
+
+            <h3>
+                Groceries
+            </h3>
+
+            <p>
+                Discover supermarkets and grocery stores.
+            </p>
+
             <button onclick="quickSearch('grocery stores')">
                 Find Groceries
             </button>
+
         </div>
+
 
     </div>
 
@@ -368,15 +500,20 @@
 
     <div class="section-heading">
 
-        <span>03 · SMART FOOD</span>
+        <span>
+            03 · SMART FOOD
+        </span>
 
-        <h2>Food That Fits You</h2>
+        <h2>
+            Food That Fits You
+        </h2>
 
         <p>
             Search by preference, budget and location.
         </p>
 
     </div>
+
 
     <div class="food-controls">
 
@@ -385,8 +522,13 @@
             placeholder="Vegetarian, vegan, halal, South Indian..."
         >
 
+
         <div class="budget-input-wrap">
-            <span>₹</span>
+
+            <span>
+                ₹
+            </span>
+
             <input
                 id="foodBudget"
                 type="number"
@@ -397,23 +539,39 @@
                 placeholder="Type budget e.g. 500"
                 aria-label="Food budget per person in Indian rupees"
             >
+
         </div>
 
+
         <label class="open-now-control">
-            <input id="foodOpenNow" type="checkbox">
-            <span>Open now</span>
+
+            <input
+                id="foodOpenNow"
+                type="checkbox"
+            >
+
+            <span>
+                Open now
+            </span>
+
         </label>
 
-        <button
-            onclick="searchFood()"
-        >
+
+        <button onclick="searchFood()">
             Discover Food
         </button>
 
     </div>
 
+
     <p class="food-note">
-        Tip: click <strong>Use my current location</strong> above to find nearby food and services around you.
+
+        Tip: click
+        <strong>
+            Use my current location
+        </strong>
+        above to find nearby food and services around you.
+
     </p>
 
 </section>
@@ -428,15 +586,20 @@
 
     <div class="section-heading">
 
-        <span>04 · SMART ROUTES</span>
+        <span>
+            04 · SMART ROUTES
+        </span>
 
-        <h2>Compare Your Journey</h2>
+        <h2>
+            Compare Your Journey
+        </h2>
 
         <p>
             Understand distance, duration and available route options.
         </p>
 
     </div>
+
 
     <div class="route-box">
 
@@ -460,163 +623,445 @@
 
     </div>
 
+
     <div id="routeResults"></div>
 
 </section>
 
 
-<!-- TRIPTWIN -->
+<!-- SMART JOURNEY PLANNER -->
 
 <section
-    id="triptwin"
-    class="section dark-panel"
+    class="smart-journey-section"
+    id="smartJourney"
 >
 
-    <div class="section-heading">
+    <div class="journey-header">
 
-        <span>05 · TRIPTWIN AI</span>
+        <span class="journey-badge">
+            SMART TRAVEL
+        </span>
 
-        <h2>Your Journey. Tested Before You Go.</h2>
+        <h2>
+            Smart Journey Planner
+        </h2>
 
         <p>
-            Check whether your plan fits your time,
-            budget and schedule buffer.
+            Plan your complete journey based on your destination,
+            preferred transport and budget.
         </p>
 
     </div>
 
-    <div class="twin-grid">
 
-        <div class="control-card">
+    <div class="journey-planner-card">
 
-            <label>
-                Total Budget
+
+        <!-- FROM -->
+
+        <div class="journey-field">
+
+            <label for="journeyFrom">
+                From
             </label>
 
             <input
-                id="twinBudget"
-                type="number"
-                value="2000"
+                type="text"
+                id="journeyFrom"
+                placeholder="Enter starting location"
+                autocomplete="off"
             >
-
-            <label>
-                Planned Spending
-            </label>
-
-            <input
-                id="twinSpending"
-                type="number"
-                value="1400"
-            >
-
-            <label>
-                Travel Time (minutes)
-            </label>
-
-            <input
-                id="twinTravel"
-                type="number"
-                value="42"
-            >
-
-            <label>
-                Schedule Buffer (minutes)
-            </label>
-
-            <input
-                id="twinBuffer"
-                type="number"
-                value="15"
-            >
-
-            <button onclick="runTripTwin()">
-                Test My Trip
-            </button>
 
         </div>
 
-        <div
-            id="twinResult"
-            class="twin-result"
-        >
 
-            <div class="twin-placeholder">
-                🧠
-                <h3>
-                    TripTwin is waiting
-                </h3>
+        <!-- TO -->
 
-                <p>
-                    Enter your trip constraints
-                    and test your plan.
-                </p>
+        <div class="journey-field">
+
+            <label for="journeyTo">
+                To
+            </label>
+
+            <input
+                type="text"
+                id="journeyTo"
+                placeholder="Enter destination"
+                autocomplete="off"
+            >
+
+        </div>
+
+
+        <!-- MODE -->
+
+        <div class="journey-field">
+
+            <label for="journeyMode">
+                Mode of Transport
+            </label>
+
+            <select id="journeyMode">
+
+                <option value="walking">
+                    🚶 Walking
+                </option>
+
+                <option value="bicycle">
+                    🚲 Bicycle
+                </option>
+
+                <option value="bike">
+                    🏍️ Bike
+                </option>
+
+                <option value="auto">
+                    🛺 Auto
+                </option>
+
+                <option value="taxi">
+                    🚕 Taxi / Cab
+                </option>
+
+                <option value="car">
+                    🚗 Car
+                </option>
+
+                <option value="bus">
+                    🚌 Bus
+                </option>
+
+                <option value="metro">
+                    🚆 Train / Metro
+                </option>
+
+                <option value="van">
+                    🚐 Van
+                </option>
+
+                <option value="flight">
+                    ✈️ Flight / Aeroplane
+                </option>
+
+            </select>
+
+        </div>
+
+
+        <!-- REACH BY -->
+
+        <div class="journey-field">
+
+            <label for="journeyArrival">
+                I Need To Reach By
+            </label>
+
+            <input
+                type="datetime-local"
+                id="journeyArrival"
+            >
+
+        </div>
+
+
+        <!-- BUDGET -->
+
+        <div class="journey-field">
+
+            <label for="journeyBudget">
+                Your Budget
+            </label>
+
+            <div class="budget-input">
+
+                <span>
+                    ₹
+                </span>
+
+                <input
+                    type="number"
+                    id="journeyBudget"
+                    placeholder="Enter your budget"
+                    min="0"
+                    step="1"
+                >
 
             </div>
 
         </div>
 
-    </div>
 
-</section>
+        <!-- BUTTON -->
 
-
-<!-- WHAT IF -->
-
-<section
-    id="simulator"
-    class="section"
->
-
-    <div class="section-heading">
-
-        <span>06 · WHAT-IF SIMULATOR</span>
-
-        <h2>Reality Changes. Your Plan Should Too.</h2>
-
-        <p>
-            Test changes before they disrupt the journey.
-        </p>
-
-    </div>
-
-    <div class="simulation-box">
-
-        <select id="scenario">
-
-            <option>
-                Reduce Budget
-            </option>
-
-            <option>
-                Remove Taxi
-            </option>
-
-            <option>
-                Less Walking
-            </option>
-
-            <option>
-                Restaurant Closed
-            </option>
-
-        </select>
-
-        <input
-            id="simulationBudget"
-            type="number"
-            value="15000"
+        <button
+            type="button"
+            id="planJourneyBtn"
+            class="plan-journey-btn"
         >
 
-        <button onclick="runSimulation()">
-            Simulate Change
+            <span>
+                Plan My Journey
+            </span>
+
         </button>
 
     </div>
 
+
+    <!-- LOADING -->
+
     <div
-        id="simulationResult"
-        class="simulation-result"
+        id="journeyLoading"
+        class="journey-loading"
+        style="display:none;"
+    >
+
+        <div class="journey-spinner"></div>
+
+        <span>
+            Calculating your journey...
+        </span>
+
+    </div>
+
+
+    <!-- ERROR -->
+
+    <div
+        id="journeyError"
+        class="journey-error"
+        style="display:none;"
     ></div>
+
+
+    <!-- RESULT -->
+
+    <div
+        id="journeyResult"
+        class="journey-result"
+        style="display:none;"
+    >
+
+
+        <div class="result-heading">
+
+            <div>
+
+                <span class="result-label">
+                    YOUR JOURNEY
+                </span>
+
+                <h3 id="journeyRouteTitle">
+                    Journey Plan
+                </h3>
+
+            </div>
+
+
+            <span
+                id="journeyBudgetStatus"
+                class="budget-status"
+            >
+            </span>
+
+        </div>
+
+
+        <!-- SUMMARY CARDS -->
+
+        <div class="journey-summary-grid">
+
+
+            <div class="journey-summary-card">
+
+                <span class="summary-icon">
+                    📍
+                </span>
+
+                <div>
+
+                    <small>
+                        Distance
+                    </small>
+
+                    <strong id="journeyDistance">
+                        —
+                    </strong>
+
+                </div>
+
+            </div>
+
+
+            <div class="journey-summary-card">
+
+                <span class="summary-icon">
+                    ⏱️
+                </span>
+
+                <div>
+
+                    <small>
+                        Estimated Time
+                    </small>
+
+                    <strong id="journeyTime">
+                        —
+                    </strong>
+
+                </div>
+
+            </div>
+
+
+            <div class="journey-summary-card">
+
+                <span class="summary-icon">
+                    💰
+                </span>
+
+                <div>
+
+                    <small>
+                        Estimated Cost
+                    </small>
+
+                    <strong id="journeyCost">
+                        —
+                    </strong>
+
+                </div>
+
+            </div>
+
+
+            <div class="journey-summary-card">
+
+                <span class="summary-icon">
+                    💵
+                </span>
+
+                <div>
+
+                    <small>
+                        Budget Remaining
+                    </small>
+
+                    <strong id="journeyRemaining">
+                        —
+                    </strong>
+
+                </div>
+
+            </div>
+
+
+        </div>
+
+
+        <!-- BUDGET MESSAGE -->
+
+        <div
+            id="journeyBudgetMessage"
+            class="journey-budget-message"
+        ></div>
+
+
+        <!-- ALTERNATIVES -->
+
+        <div
+            id="journeyAlternatives"
+            class="journey-alternatives"
+        >
+
+            <h3>
+                Budget-Friendly Alternatives
+            </h3>
+
+            <div
+                id="alternativeList"
+                class="alternative-list"
+            ></div>
+
+        </div>
+
+
+        <!-- TRANSPORT COMPARISON -->
+
+        <div class="transport-comparison">
+
+            <div class="comparison-heading">
+
+                <h3>
+                    Compare Your Journey
+                </h3>
+
+                <p>
+                    Estimated comparison for the same route
+                </p>
+
+            </div>
+
+
+            <div class="comparison-table-wrapper">
+
+                <table
+                    class="transport-table"
+                    id="transportComparisonTable"
+                >
+
+                    <thead>
+
+                        <tr>
+
+                            <th>
+                                Transport
+                            </th>
+
+                            <th>
+                                Distance
+                            </th>
+
+                            <th>
+                                Time
+                            </th>
+
+                            <th>
+                                Est. Cost
+                            </th>
+
+                        </tr>
+
+                    </thead>
+
+
+                    <tbody
+                        id="transportComparisonBody"
+                    ></tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+
+        <!-- NOTE -->
+
+        <div class="journey-note">
+
+            <span>
+                ⓘ
+            </span>
+
+            Distance, travel time and cost are estimates unless
+            NaviSphere has live or scheduled transport data.
+            Actual values may vary depending on route,
+            traffic and local transport fares.
+
+        </div>
+
+    </div>
 
 </section>
 
@@ -645,17 +1090,26 @@
 
 </section>
 
+
 </main>
 
+
+<!-- FOOTER -->
 
 <footer>
 
     <div>
-        <strong>NaviSphere AI</strong>
+
+        <strong>
+            NaviSphere AI
+        </strong>
+
         <p>
             Understand any place. Navigate with confidence.
         </p>
+
     </div>
+
 
     <div>
         Powered by real-world search intelligence
@@ -664,14 +1118,20 @@
 </footer>
 
 
+<!-- LEAFLET -->
+
 <script
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
 ></script>
+
+
+<!-- NAVISPHERE JAVASCRIPT -->
 
 <script
     src="{{ url_for('static', filename='app.js', v='20260925-1') }}"
 ></script>
 
+
 </body>
 
-</html>
+</html> 
